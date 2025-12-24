@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import UserCreationForm
+from .forms import CustomUserCreationForm
 from django.core.paginator import Paginator
 from django.db.models import Count
 from django.http import Http404
@@ -17,19 +17,19 @@ User = get_user_model()
 
 POSTS_PER_PAGE = 10
 
+def _with_comment_count(qs):
+    return qs.annotate(comment_count=Count('comments')).order_by('-pub_date')
 
 def _public_posts_qs():
-    """Посты, доступные всем."""
-    return (
+    qs = (
         Post.objects.select_related('author', 'category', 'location')
         .filter(
             pub_date__lte=timezone.now(),
             is_published=True,
             category__is_published=True,
         )
-        .annotate(comment_count=Count('comments'))
-        .order_by('-pub_date')
     )
+    return _with_comment_count(qs)
 
 
 def _paginate(request, queryset):
@@ -58,14 +58,21 @@ def profile(request, username):
     profile_user = get_object_or_404(User, username=username)
 
     if request.user.is_authenticated and request.user == profile_user:
-        posts = (
+        posts = _with_comment_count(
             Post.objects.select_related('author', 'category', 'location')
             .filter(author=profile_user)
-            .annotate(comment_count=Count('comments'))
-            .order_by('-pub_date')
         )
     else:
         posts = _public_posts_qs().filter(author=profile_user)
+
+    page_obj = _paginate(request, posts)
+
+    context = {
+        'profile': profile_user,
+        'page_obj': page_obj,
+    }
+    return render(request, 'blog/profile.html', context)
+
 
     page_obj = _paginate(request, posts)
     return render(
@@ -204,6 +211,6 @@ def edit_profile(request):
 
 
 class RegistrationView(CreateView):
-    form_class = UserCreationForm
+    form_class = CustomUserCreationForm
     template_name = 'registration/registration_form.html'
     success_url = reverse_lazy('login')

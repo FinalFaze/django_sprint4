@@ -24,3 +24,13 @@ def permission_denied(request, exception=None):
 
 def csrf_failure(request, reason=''):
     return render(request, 'pages/403csrf.html', status=403)
+
+from django.contrib.auth import logout as auth_logout
+from django.shortcuts import redirect
+from django.urls import reverse
+
+
+def logout_get(request):
+    """Logout, который работает по GET (нужно, т.к. в шаблоне ссылка)."""
+    auth_logout(request)
+    return redirect(reverse('blog:index'))
